@@ -50,6 +50,8 @@ net = cv2.dnn.readNetFromDarknet(YOLO_CFG, YOLO_WEIGHTS)
 LABELS = LABELS_YOLO
 yolo_family = True
 
+THRESH = 0.3
+
 CONF = 0.3
 if args.get('conf'):
     CONF = float(args.get('conf'))
@@ -138,3 +140,20 @@ while True:
                         b_boxes.append([x, y, int(width), int(height)])
                         centroids.append((c_x, c_y))
                         confidences.append(float(confidence))
+    else:
+        for i in np.arange(0, outputs.shape[2]):
+            confidence = outputs[0, 0, i, 2]
+            if confidence > CONF and int(outputs[0, 0, i, 1]) == person_idx:
+                b_box = outputs[0, 0, i, 3:7] * np.array([w, h, w, h])
+                start_x, start_y, end_x, end_y = b_box.astype("int")
+                width = abs(end_x - start_x)
+                height = abs(end_y - start_y)
+                c_x = start_x / 2 + end_x / 2
+                c_y = start_y / 2 + end_y / 2
+                x = int(c_x - width / 2)
+                y = int(c_y - height / 2)
+                b_boxes.append([x, y, int(width), int(height)])
+                centroids.append((c_x, c_y))
+                confidences.append(float(confidence))
+
+    indexes = cv2.dnn.NMSBoxes(b_boxes, confidences, CONF, THRESH)
