@@ -1,6 +1,9 @@
 import argparse
 import cv2
 
+from imutils.video import FPS
+import numpy as np
+
 ap = argparse.ArgumentParser()
 
 ap.add_argument('-n', '--net', type=str,
@@ -45,6 +48,7 @@ LABELS_YOLO = open("YOLO/coco.names.txt").read().strip().splitlines(keepends=Fal
 net = cv2.dnn.readNetFromDarknet(YOLO_CFG, YOLO_WEIGHTS)
 
 LABELS = LABELS_YOLO
+yolo_family = True
 
 CONF = 0.3
 if args.get('conf'):
@@ -55,6 +59,7 @@ DISTANCE_POTENTIAL_RISK = float(args.get('max'))
 
 if args.get('net') == "ssd":
     net = cv2.dnn.readNetFromCaffe(PROTOTXT_SSD, MODEL_SSD)
+    yolo_family = False
     LABELS = LABELS_SSD
 
     # configure your ssd parameters here
@@ -86,3 +91,50 @@ with open(GROUND_TRUTH, mode='r') as gf_file:
         gt[int(tokens[1])].append(
             [int(tokens[-4]), int(tokens[-3]), int(tokens[-2]), int(tokens[-1]), person_idx, 0, 0]
         )
+
+# determine the output layer
+if yolo_family:
+    ln = net.getLayerNames()
+    ln = [ln[i - 1] for i in net.getUnconnectedOutLayers()]
+
+fps = FPS().start()
+
+predictions = {}
+
+cap = cv2.VideoCapture(INP_VIDEO_PATH)
+frame_count = 0
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    h, w = frame.shape[:2]
+
+    blob = cv2.dnn.blobFromImage(frame, 1 / 255.0, (416, 416),
+                                 swapRB=True, crop=False)
+    net.setInput(blob)
+    if yolo_family:
+        outputs = net.forward(ln)
+    else:
+        outputs = net.forward()
+    b_boxes = []
+    centroids = []
+    confidences = []
+    results = []
+    predictions[int(frame_count)] = []
+
+    if yolo_family:
+        for output in outputs:
+            for detection in output:
+                candidate = np.argmax(detection[5:])
+
+                if candidate == person_idx:
+                    confidence = detection[5:][candidate]
+                    if confidence > CONF:
+                        b_box = detection[0:4] * np.array([w, h, w, h])
+                        c_x, c_y, width, height = b_box.astype("int")
+                        x = int(c_x - width / 2)
+                        y = int(c_y - height / 2)
+                        b_boxes.append([x, y, int(width), int(height)])
+                        centroids.append((c_x, c_y))
+                        confidences.append(float(confidence))
