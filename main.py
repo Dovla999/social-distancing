@@ -4,6 +4,8 @@ import cv2
 from imutils.video import FPS
 import numpy as np
 
+from scipy.spatial import distance
+
 ap = argparse.ArgumentParser()
 
 ap.add_argument('-n', '--net', type=str,
@@ -52,6 +54,8 @@ yolo_family = True
 
 THRESH = 0.3
 
+INCH_TO_M = 0.0254
+
 CONF = 0.3
 if args.get('conf'):
     CONF = float(args.get('conf'))
@@ -97,7 +101,10 @@ with open(GROUND_TRUTH, mode='r') as gf_file:
 # determine the output layer
 if yolo_family:
     ln = net.getLayerNames()
-    ln = [ln[i - 1] for i in net.getUnconnectedOutLayers()]
+    try:
+        ln = [ln[i - 1] for i in net.getUnconnectedOutLayers()]
+    except TypeError:
+        ln = [ln[i[0] - 1] for i in net.getUnconnectedOutLayers()]
 
 fps = FPS().start()
 
@@ -157,3 +164,36 @@ while True:
                 confidences.append(float(confidence))
 
     indexes = cv2.dnn.NMSBoxes(b_boxes, confidences, CONF, THRESH)
+
+
+    def calculate_d(w_d, h_d):
+        return float((2 * 3.14 * 180) * 1000 / (w_d + h_d * 360) + 3)
+
+
+    if len(indexes) > 0:
+        for i in indexes.flatten():
+            r = (confidences[i],
+                 (b_boxes[i][0], b_boxes[i][1], b_boxes[i][0] + b_boxes[i][2], b_boxes[i][1] + b_boxes[i][3]),
+                 # x y d
+                 [*centroids[i], *[calculate_d(b_boxes[i][2], b_boxes[i][3])]])
+            predictions[int(frame_count)].append(
+                [*r[1]] + [person_idx, confidences[i]]
+            )
+            results.append(r)
+
+    potential_risk = set()
+    risk = set()
+
+    if len(results) > 1:
+        centres = np.array([result[2] for result in results])
+        # q & p:  sqrt((q_x-p_x)2 + (q_y-p_y)2 + (q_d - p_d)2)
+        distances = distance.cdist(centres, centres, metric="euclidean") * INCH_TO_M
+
+        for i in range(0, distances.shape[1]):
+            for j in range(i + 1, distances.shape[1]):
+                if distances[i, j] < DISTANCE_RISK:
+                    risk.add(i)
+                    risk.add(j)
+                if distances[i, j] < DISTANCE_POTENTIAL_RISK and i not in risk and j not in risk:
+                    potential_risk.add(i)
+                    potential_risk.add(j)
