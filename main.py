@@ -197,3 +197,23 @@ while True:
                 if distances[i, j] < DISTANCE_POTENTIAL_RISK and i not in risk and j not in risk:
                     potential_risk.add(i)
                     potential_risk.add(j)
+
+    for (i, (prob, box, centroid)) in enumerate(results):
+        s_x, s_y, e_x, e_y = box
+        centroid_x, centroid_y = centroid[:-1]
+        color_rec = 0, 255, 0
+        if i in risk:
+            color_rec = 0, 0, 255
+        elif i in potential_risk:
+            color_rec = 0, 200, 255
+
+        cv2.rectangle(frame, (int(s_x), int(s_y)), (int(e_x), int(e_y)), color_rec, 2)
+        cv2.circle(frame, (int(centroid_x), int(centroid_y)), 7, color_rec, 2)
+
+    cv2.putText(frame, str(frame_count), (200, frame.shape[0] - 100), cv2.QT_FONT_BLACK, 1, (0, 0, 0), 2)
+    frame_count += 1
+    cv2.imshow("Real time people detection", frame)
+    cv2.waitKey(1)
+    fps.update()
+
+fps.stop()
