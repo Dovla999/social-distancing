@@ -6,6 +6,11 @@ import numpy as np
 
 from scipy.spatial import distance
 
+import json
+from datetime import datetime
+
+from mAP import calculate_map
+
 ap = argparse.ArgumentParser()
 
 ap.add_argument('-n', '--net', type=str,
@@ -217,3 +222,17 @@ while True:
     fps.update()
 
 fps.stop()
+
+json.dump(predictions, open("predictions.txt", 'w'))
+json.dump(gt, open("ground_truth.txt", 'w'))
+
+with open("results.txt", mode="a+") as results_file:
+    results_file.writelines("#######################################\n")
+    results_file.writelines("Timestamp: {}".format(datetime.now()))
+    results_file.writelines("Model used: {}\n".format(args.get("net")))
+    results_file.writelines("Total time: {:.3f}\n".format(fps.elapsed()))
+    results_file.writelines("Average FPS: {:.3f}\n".format(fps.fps()))
+    results_file.writelines("mAP : {:.3f}".format(calculate_map()))
+    results_file.writelines("#######################################\n")
+
+cv2.destroyAllWindows()
